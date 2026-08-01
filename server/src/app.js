@@ -41,9 +41,13 @@ app.get('/health', (req, res) => {
   return ApiResponse.success(res, { uptime: process.uptime() }, 'HydraFlow API Server is healthy');
 });
 
-// API Routes
+// API Routes - /api/* prefix (local dev & direct access)
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+
+// API Routes - no prefix (Vercel serverless strips /api when handler is at /api path)
+app.use('/auth', authRoutes);
+app.use('/products', productRoutes);
 
 // Catch-all 404 handler
 app.use('*', (req, res) => {
