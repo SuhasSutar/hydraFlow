@@ -1,0 +1,801 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. COMPANIES
+model Company {
+  id                 String           @id @default(uuid()) @map("_id")
+  name               String
+  type               CompanyType
+  registrationNumber String?          @unique
+  addressLine1       String?
+  addressLine2       String?
+  city               String?
+  state              String?
+  pincode            String?
+  country            String           @default("India")
+  phone              String?
+  email              String?
+  logoUrl            String?
+  status             CompanyStatus    @default(ACTIVE)
+  subscriptionPlan   SubscriptionPlan @default(BASIC)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  users              User[]
+  productModels      ProductModel[]
+  inventoryStock     InventoryStock[]
+  placedOrders       Order[]          @relation("DealerOrders")
+  receivedOrders     Order[]          @relation("ManufacturerOrders")
+  sales              Sale[]
+  installations      Installation[]
+  serviceTickets     ServiceTicket[]
+  pumpUnits          PumpUnit[]       @relation("DealerPumps")
+
+  @@index([type, status])
+}
+
+enum CompanyType {
+  MANUFACTURER
+  DEALER
+  SERVICE_PROVIDER
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum SubscriptionPlan {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+// 2. USERS & CUSTOMERS
+model User {
+  id                   String           @id @default(uuid()) @map("_id")
+  companyId            String?
+  email                String           @unique
+  passwordHash         String
+  firstName            String
+  lastName             String
+  phone                String?
+  role                 UserRole
+  avatarUrl            String?
+  isVerified           Boolean          @default(false)
+  isActive             Boolean          @default(true)
+  lastLoginAt          DateTime?
+  pushNotifications    Boolean          @default(true)
+  emailNotifications   Boolean          @default(true)
+  smsNotifications     Boolean          @default(false)
+  refreshToken         String?
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  company              Company?         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customerProfile      CustomerProfile?
+  assignedTickets      ServiceTicket[]  @relation("EngineerTickets")
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  fieldInventory       FieldInventory[]
+  installations        Installation[]   @relation("EngineerInstallations")
+  registeredWarranties Warranty[]
+  claims               WarrantyClaim[]
+  amcContracts         AMCContract[]
+  sales                Sale[]
+  reportedTickets      ServiceTicket[]  @relation("CustomerTickets")
+  ownedPumps           PumpUnit[]       @relation("UserPumps")
+
+  @@index([role, isActive])
+  @@index([companyId])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANUFACTURER_USER
+  DEALER_USER
+  SERVICE_ENGINEER
+  CUSTOMER
+}
+
+model CustomerProfile {
+  id                   String        @id @map("_id")
+  addressLine1         String?
+  addressLine2         String?
+  city                 String?
+  state                String?
+  pincode              String?
+  latitude             Float?
+  longitude            Float?
+  preferredContactTime String?
+  registeredByDealerId String?
+
+  user                 User          @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([registeredByDealerId])
+}
+
+// 3. PRODUCT CATALOG & STOCK
+model ProductCategory {
+  id            String            @id @default(uuid()) @map("_id")
+  name          String
+  description   String?
+  iconUrl       String?
+  parentId      String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  parent        ProductCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subCategories ProductCategory[] @relation("CategoryHierarchy")
+  models        ProductModel[]
+
+  @@index([parentId])
+}
+
+model ProductModel {
+  id             String           @id @default(uuid()) @map("_id")
+  manufacturerId String
+  categoryId     String
+  modelName      String
+  modelNumber    String           @unique
+  description    String?
+  powerHp        Float?
+  voltage        Float?
+  phase          PhaseType?
+  flowRateLpm    Float?
+  headM          Float?
+  inletSize      String?
+  outletSize     String?
+  material       String?
+  weight         Float?
+  mrp            Float
+  dealerPrice    Float
+  warrantyMonths Int              @default(12)
+  isIoTEnabled   Boolean          @default(false)
+  images         Json?
+  status         ProductStatus    @default(DRAFT)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  manufacturer   Company          @relation(fields: [manufacturerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  category       ProductCategory  @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pumpUnits      PumpUnit[]
+  orderItems     OrderItem[]
+  inventoryStock InventoryStock[]
+  alertRules     IoTAlertRule[]
+
+  @@index([manufacturerId, status])
+}
+
+enum PhaseType {
+  SINGLE
+  THREE
+}
+
+enum ProductStatus {
+  ACTIVE
+  DISCONTINUED
+  DRAFT
+}
+
+model PumpUnit {
+  id                String         @id @default(uuid()) @map("_id")
+  modelId           String
+  serialNumber      String         @unique
+  manufacturingDate DateTime?
+  batchNumber       String?
+  qrCode            String?        @unique
+  iotDeviceId       String?        @unique
+  currentOwnerId    String?
+  currentDealerId   String?
+  status            PumpStatus     @default(IN_FACTORY)
+  installationId    String?
+  latitude          Float?
+  longitude         Float?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  model             ProductModel   @relation(fields: [modelId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  owner             User?          @relation("UserPumps", fields: [currentOwnerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dealer            Company?       @relation("DealerPumps", fields: [currentDealerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  iotDevice         IoTDevice?
+  warranty          Warranty?
+  sales             Sale[]
+  installations     Installation[]
+  serviceTickets    ServiceTicket[]
+  amcContracts      AMCContract[]
+  iotAlerts         IoTAlert[]     @relation("PumpAlerts")
+
+  @@index([currentOwnerId])
+  @@index([currentDealerId, status])
+}
+
+enum PumpStatus {
+  IN_FACTORY
+  IN_TRANSIT
+  AT_DEALER
+  SOLD
+  INSTALLED
+  DECOMMISSIONED
+}
+
+model InventoryStock {
+  id                String       @id @default(uuid()) @map("_id")
+  companyId         String
+  modelId           String
+  quantityOnHand    Int          @default(0)
+  quantityReserved  Int          @default(0)
+  reorderLevel      Int          @default(5)
+  warehouseLocation String?
+  lastRestockedAt   DateTime?
+  updatedAt         DateTime     @updatedAt
+
+  company           Company      @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  model             ProductModel @relation(fields: [modelId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([companyId, modelId])
+}
+
+model FieldInventory {
+  id                String                 @id @default(uuid()) @map("_id")
+  engineerId        String
+  partName          String
+  partNumber        String?
+  quantity          Int
+  category          FieldInventoryCategory
+  lastReplenishedAt DateTime?
+  createdAt         DateTime               @default(now())
+
+  engineer          User                   @relation(fields: [engineerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([engineerId])
+}
+
+enum FieldInventoryCategory {
+  SPARE_PART
+  TOOL
+  CONSUMABLE
+}
+
+// 4. ORDERS & SALES
+model Order {
+  id             String      @id @default(uuid()) @map("_id")
+  orderNumber    String      @unique
+  dealerId       String
+  manufacturerId String
+  status         OrderStatus @default(DRAFT)
+  totalAmount    Float
+  discountPercent Float    @default(0)
+  taxAmount      Float     @default(0)
+  notes          String?
+  orderedAt      DateTime?
+  expectedDelivery DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime    @default(now())
+
+  dealer         Company     @relation("DealerOrders", fields: [dealerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manufacturer   Company     @relation("ManufacturerOrders", fields: [manufacturerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items          OrderItem[]
+
+  @@index([dealerId, status])
+  @@index([manufacturerId, status])
+}
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id          String       @id @default(uuid()) @map("_id")
+  orderId     String
+  modelId     String
+  quantity    Int
+  unitPrice   Float
+  lineTotal   Float
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  model       ProductModel @relation(fields: [modelId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([orderId])
+}
+
+model Sale {
+  id            String          @id @default(uuid()) @map("_id")
+  saleNumber    String          @unique
+  dealerId      String
+  customerId    String
+  pumpUnitId    String
+  salePrice     Float
+  saleDate      DateTime        @default(now())
+  invoiceUrl    String?
+  paymentMethod PaymentMethod
+
+  dealer        Company         @relation(fields: [dealerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer      User            @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pumpUnit      PumpUnit        @relation(fields: [pumpUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([dealerId])
+  @@index([customerId])
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  BANK_TRANSFER
+  FINANCING
+}
+
+// 5. INSTALLATIONS
+model Installation {
+  id                 String           @id @default(uuid()) @map("_id")
+  installationNumber String           @unique
+  pumpUnitId         String
+  customerId         String
+  dealerId           String
+  engineerId         String?
+  status             InstallStatus    @default(REQUESTED)
+  scheduledDate      DateTime?
+  scheduledTimeSlot  String?
+  installationType   InstallationType @default(NEW)
+  addressLine1       String
+  addressLine2       String?
+  city               String
+  state              String
+  pincode            String
+  latitude           Float?
+  longitude          Float?
+  borewellDepthFt    Float?
+  waterTableDepthFt  Float?
+  powerSupplyType    PowerSupplyType?
+  notes              String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime         @default(now())
+
+  pumpUnit           PumpUnit         @relation(fields: [pumpUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dealer             Company          @relation(fields: [dealerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  engineer           User?            @relation("EngineerInstallations", fields: [engineerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  checklists         InstallationChecklist[]
+
+  @@index([engineerId, status])
+}
+
+enum InstallStatus {
+  REQUESTED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+  CANCELLED
+}
+
+enum InstallationType {
+  NEW
+  REPLACEMENT
+  RELOCATION
+}
+
+enum PowerSupplyType {
+  SINGLE_PHASE
+  THREE_PHASE
+  SOLAR
+}
+
+model InstallationChecklist {
+  id             String       @id @default(uuid()) @map("_id")
+  installationId String
+  stepNumber     Int
+  stepTitle      String
+  isCompleted    Boolean      @default(false)
+  completedBy    String?
+  completedAt    DateTime?
+  notes          String?
+  photoUrls      Json?
+
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([installationId])
+}
+
+// 6. SUPPORT & SERVICE
+model Warranty {
+  id               String         @id @default(uuid()) @map("_id")
+  pumpUnitId       String         @unique
+  warrantyType     WarrantyType
+  startDate        DateTime
+  endDate          DateTime
+  status           WarrantyStatus @default(ACTIVE)
+  termsDocumentUrl String?
+  registeredBy     String?
+  createdAt        DateTime       @default(now())
+
+  pumpUnit         PumpUnit       @relation(fields: [pumpUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user             User?          @relation(fields: [registeredBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  claims           WarrantyClaim[]
+
+  @@index([endDate, status])
+}
+
+enum WarrantyType {
+  STANDARD
+  EXTENDED
+  PREMIUM
+}
+
+enum WarrantyStatus {
+  ACTIVE
+  EXPIRED
+  VOIDED
+  CLAIMED
+}
+
+model WarrantyClaim {
+  id              String       @id @default(uuid()) @map("_id")
+  claimNumber     String       @unique
+  warrantyId      String
+  customerId      String
+  issueDescription String
+  claimType       ClaimType
+  status          ClaimStatus  @default(SUBMITTED)
+  resolutionNotes String?
+  serviceTicketId String?
+  filedAt         DateTime     @default(now())
+  resolvedAt      DateTime?
+
+  warranty        Warranty     @relation(fields: [warrantyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer        User         @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceTicket   ServiceTicket? @relation("TicketResolution", fields: [serviceTicketId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([warrantyId])
+  @@index([customerId])
+}
+
+enum ClaimType {
+  REPAIR
+  REPLACEMENT
+  REFUND
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RESOLVED
+}
+
+model AMCContract {
+  id             String       @id @default(uuid()) @map("_id")
+  contractNumber String       @unique
+  customerId     String
+  pumpUnitId     String
+  planType       AMCPlanType
+  startDate      DateTime
+  endDate        DateTime
+  annualFee      Float?
+  visitsIncluded Int
+  visitsUsed     Int          @default(0)
+  status         AMCStatus    @default(ACTIVE)
+  autoRenew      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  customer       User         @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pumpUnit       PumpUnit     @relation(fields: [pumpUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([customerId])
+  @@index([endDate, status])
+}
+
+enum AMCPlanType {
+  BASIC
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum AMCStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  RENEWED
+}
+
+model ServiceTicket {
+  id                 String                 @id @default(uuid()) @map("_id")
+  ticketNumber       String                 @unique
+  pumpUnitId         String
+  customerId         String
+  assignedEngineerId String?
+  dealerId           String?
+  type               ServiceTicketType
+  priority           TicketPriority         @default(MEDIUM)
+  status             ServiceTicketStatus    @default(OPEN)
+  issueSummary       String
+  issueDescription   String?
+  reportedFaultCode  String?
+  diagnosis          String?
+  resolution         String?
+  scheduledDate      DateTime?
+  scheduledTimeSlot  String?
+  slaDueAt           DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  signedOffAt        DateTime?
+  customerSignatureUrl String?
+  customerRating     Int?
+  customerFeedback   String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  pumpUnit           PumpUnit               @relation(fields: [pumpUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer           User                   @relation("CustomerTickets", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  engineer           User?                  @relation("EngineerTickets", fields: [assignedEngineerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  coordinator        Company?               @relation(fields: [dealerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parts              ServiceTicketPart[]
+  photos             ServiceTicketPhoto[]
+  timeline           ServiceTicketTimeline[]
+  claims             WarrantyClaim[]        @relation("TicketResolution")
+
+  @@index([assignedEngineerId, status])
+  @@index([customerId, status])
+  @@index([slaDueAt, status])
+}
+
+enum ServiceTicketType {
+  REPAIR
+  MAINTENANCE
+  INSPECTION
+  INSTALLATION
+  WARRANTY_CLAIM
+}
+
+enum TicketPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ServiceTicketStatus {
+  OPEN
+  ASSIGNED
+  EN_ROUTE
+  IN_PROGRESS
+  PENDING_PARTS
+  COMPLETED
+  SIGNED_OFF
+  CANCELLED
+}
+
+model ServiceTicketPart {
+  id                String        @id @default(uuid()) @map("_id")
+  ticketId          String
+  partName          String
+  partNumber        String?
+  quantity          Int
+  unitCost          Float?
+  isWarrantyCovered Boolean       @default(false)
+
+  ticket            ServiceTicket @relation(fields: [ticketId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([ticketId])
+}
+
+model ServiceTicketPhoto {
+  id        String        @id @default(uuid()) @map("_id")
+  ticketId  String
+  photoUrl  String
+  caption   String?
+  phase     PhotoPhase
+  uploadedAt DateTime     @default(now())
+
+  ticket    ServiceTicket @relation(fields: [ticketId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([ticketId])
+}
+
+enum PhotoPhase {
+  BEFORE
+  DURING
+  AFTER
+}
+
+model ServiceTicketTimeline {
+  id          String        @id @default(uuid()) @map("_id")
+  ticketId    String
+  action      String
+  performedBy String
+  timestamp   DateTime      @default(now())
+  metadata    Json?
+
+  ticket      ServiceTicket @relation(fields: [ticketId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([ticketId])
+}
+
+// 7. IOT & NOTIFICATIONS
+model IoTDevice {
+  id                String        @id @default(uuid()) @map("_id")
+  deviceId          String        @unique
+  pumpUnitId        String        @unique
+  firmwareVersion   String?
+  connectivityType  IoTConnectivity?
+  lastSeenAt        DateTime?
+  status            IoTDeviceStatus @default(OFFLINE)
+  batteryLevel      Float?
+  signalStrengthDbm Int?
+  registeredAt      DateTime      @default(now())
+
+  pumpUnit          PumpUnit      @relation(fields: [pumpUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  alerts            IoTAlert[]
+
+  @@index([status])
+}
+
+enum IoTConnectivity {
+  FOUR_G
+  WIFI
+  LORA
+  SATELLITE
+}
+
+enum IoTDeviceStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+  FAULTY
+}
+
+model TelemetryData {
+  id             String   @id @default(uuid()) @map("_id")
+  deviceId       String
+  timestamp      DateTime @default(now())
+  temperatureC   Float?
+  pressureBar    Float?
+  flowRateLpm    Float?
+  voltageV       Float?
+  currentA       Float?
+  powerKw        Float?
+  rpm            Int?
+  vibrationMmS   Float?
+  waterLevelM    Float?
+  runHours       Float?
+
+  @@index([deviceId, timestamp(sort: Desc)])
+}
+
+model IoTAlert {
+  id                    String        @id @default(uuid()) @map("_id")
+  deviceId              String
+  pumpUnitId            String
+  alertType             IoTAlertType
+  severity              AlertSeverity
+  message               String?
+  metricName            String?
+  metricValue           Float?
+  thresholdValue        Float?
+  isAcknowledged        Boolean       @default(false)
+  acknowledgedBy        String?
+  autoGeneratedTicketId String?
+  triggeredAt           DateTime      @default(now())
+  resolvedAt            DateTime?
+
+  device                IoTDevice     @relation(fields: [deviceId], references: [deviceId], onDelete: NoAction, onUpdate: NoAction)
+  pumpUnit              PumpUnit      @relation("PumpAlerts", fields: [pumpUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([deviceId, triggeredAt(sort: Desc)])
+  @@index([isAcknowledged, severity])
+}
+
+enum IoTAlertType {
+  OVER_TEMP
+  LOW_PRESSURE
+  OVER_VOLTAGE
+  DRY_RUN
+  HIGH_VIBRATION
+  OFFLINE
+  ANOMALY
+}
+
+enum AlertSeverity {
+  CRITICAL
+  WARNING
+  INFO
+}
+
+model IoTAlertRule {
+  id               String        @id @default(uuid()) @map("_id")
+  companyId        String?
+  modelId          String?
+  metricName       String
+  operator         AlertOperator
+  threshold        Float
+  severity         AlertSeverity
+  autoCreateTicket Boolean       @default(false)
+  isActive         Boolean       @default(true)
+
+  model            ProductModel? @relation(fields: [modelId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+enum AlertOperator {
+  GT
+  LT
+  GTE
+  LTE
+  EQ
+}
+
+model Notification {
+  id            String           @id @default(uuid()) @map("_id")
+  userId        String
+  title         String
+  body          String
+  type          NotificationType
+  referenceType String?
+  referenceId   String?
+  channel       NotificationChannel @default(IN_APP)
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+  createdAt     DateTime         @default(now())
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+}
+
+enum NotificationType {
+  SERVICE_UPDATE
+  IOT_ALERT
+  WARRANTY_EXPIRY
+  ORDER_STATUS
+  SYSTEM
+  PROMOTION
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  EMAIL
+  SMS
+}
+
+model AuditLog {
+  id         String     @id @default(uuid()) @map("_id")
+  userId     String
+  entityType String
+  entityId   String
+  action     AuditAction
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime   @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([entityType, entityId, timestamp(sort: Desc)])
+  @@index([userId, timestamp(sort: Desc)])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+}

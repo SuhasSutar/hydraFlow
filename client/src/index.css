@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* HydraFlow Custom Theme Styles & Variables */
+
+:root {
+  --color-primary: #003c90;
+  --color-primary-dark: #002966;
+  --color-primary-light: #d9e2ff;
+  --color-primary-container: #0f52ba;
+  --color-secondary: #545f72;
+  --color-tertiary: #004855;
+  --color-tertiary-container: #006172;
+  --color-surface-bright: #f7f9fb;
+  --color-surface-container: #eceef0;
+  --color-surface-container-high: #e6e8ea;
+  --color-surface-container-highest: #e0e3e5;
+  --color-surface-container-low: #f2f4f6;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-dim: #d8dadc;
+  --color-outline: #737784;
+  --color-outline-variant: #c3c6d5;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+}
+
+/* Base resets & styles overriding Bootstrap defaults */
+body {
+  background-color: var(--color-surface-bright);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #191c1e;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-weight: 700;
+}
+
+/* Custom colors & helper utility overrides */
+.bg-primary-custom { background-color: var(--color-primary) !important; }
+.bg-primary-dark-custom { background-color: var(--color-primary-dark) !important; }
+.bg-primary-light-custom { background-color: var(--color-primary-light) !important; }
+.bg-primary-container-custom { background-color: var(--color-primary-container) !important; }
+.bg-surface-bright-custom { background-color: var(--color-surface-bright) !important; }
+.bg-surface-container-low-custom { background-color: var(--color-surface-container-low) !important; }
+.bg-surface-container-lowest-custom { background-color: var(--color-surface-container-lowest) !important; }
+.bg-surface-container-custom { background-color: var(--color-surface-container) !important; }
+.bg-surface-container-high-custom { background-color: var(--color-surface-container-high) !important; }
+
+.text-primary-custom { color: var(--color-primary) !important; }
+.text-primary-dark-custom { color: var(--color-primary-dark) !important; }
+.text-primary-light-custom { color: var(--color-primary-light) !important; }
+.text-primary-container-custom { color: var(--color-primary-container) !important; }
+.text-on-surface-custom { color: #191c1e !important; }
+
+.border-outline-variant-custom { border-color: var(--color-outline-variant) !important; }
+.border-outline-custom { border-color: var(--color-outline) !important; }
+
+.font-display {
+  font-family: "Hanken Grotesk", sans-serif !important;
+}
+.font-body {
+  font-family: "Inter", sans-serif !important;
+}
+.font-mono {
+  font-family: "JetBrains Mono", monospace !important;
+}
+
+/* Progress bar animation */
+@keyframes progress-slide {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(-10%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-progress {
+  animation: progress-slide 2.2s infinite ease-in-out;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+}
+
+.hover-bg-surface-container-high:hover {
+  background-color: var(--color-surface-container-high) !important;
+  color: #191c1e !important;
+}
+
+.hover-border-primary:hover {
+  border-color: var(--color-primary) !important;
+}
+
+/* Sidebar responsive spacer */
+@media (min-width: 1024px) {
+  .ml-lg-sidebar {
+    margin-left: 256px !important;
+  }
+  .w-lg-sidebar {
+    width: 256px !important;
+  }
+}
+
+/* End of custom theme variables & resets. Native Tailwind handles all utility classes below this point. */
+/* Sidebar mobile slide-in drawer */
+@media (max-width: 1023.98px) {
+  .sidebar-mobile {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out !important;
+  }
+  .sidebar-mobile.show {
+    transform: translateX(0) !important;
+  }
+}
+
+/* Global utility class for custom outline styling compatibility */
+.outline-hidden {
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+}
